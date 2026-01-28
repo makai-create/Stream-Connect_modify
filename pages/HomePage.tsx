@@ -1,227 +1,158 @@
-import React, { useState } from 'react';
-import { MapPin, Briefcase as BriefcaseIcon } from 'lucide-react';
-import { User, AttendanceStatus, ShiftViewState, AttendanceLogWithCorrection } from '../types';
-import { CutCornerButton, CyberFrame } from '../components/CyberUI';
-import { ScannerOverlay, PunchType } from '../components/ScannerOverlay';
+import React, { useState, useEffect } from 'react';
+import { 
+  Home, Calendar, Wifi, Settings as SettingsIcon, Zap, 
+  Bell
+} from 'lucide-react';
+import { Tab, User, AppNotification, ShiftViewState, ExtendedShiftDayLocal, AppState, AttendanceStatus, AttendanceLogWithCorrection } from './types';
+import { PunchType } from './components/ScannerOverlay';
 
-interface HomePageProps {
-  userData: User;
-  attendanceStatus: AttendanceStatus;
-  startScan: (type: PunchType) => void;
-  isScanning: boolean;
-  setIsScanning: (scanning: boolean) => void;
-  handleScanSuccess: (type: PunchType) => void;
-  shiftViewState: ShiftViewState;
-  setShiftViewState: (state: ShiftViewState) => void;
-  attendanceHistory: AttendanceLogWithCorrection[];
-  // App.tsx から渡される点火状態
-  isIgnited: boolean;
-  setIsIgnited: (ignited: boolean) => void;
-}
+import LoginPage from './pages/LoginPage';
+import SetupAvatarPage from './pages/SetupAvatarPage';
+import SetupProfilePage from './pages/SetupProfilePage';
+import HomePage from './pages/HomePage';
+import ShiftPage from './pages/ShiftPage';
+import SignalPage from './pages/SignalPage';
+import SettingsPage from './pages/SettingsPage';
 
-const HomePage: React.FC<HomePageProps> = ({
-  userData,
-  attendanceStatus,
-  startScan,
-  isScanning,
-  setIsScanning,
-  handleScanSuccess,
-  shiftViewState,
-  setShiftViewState,
-  attendanceHistory,
-  isIgnited,
-  setIsIgnited,
-}) => {
-  const [currentPunchType, setCurrentPunchType] = useState<PunchType>('in');
+// --- 画像パスの設定 (publicフォルダ直下からの絶対パス) ---
+const AVATAR_OPTIONS = [
+  "/images/avatars/avatars_f_01.png",
+  "/images/avatars/avatars_f_02.png"
+];
+const HOME_BG_IMAGE = "/images/backgrounds/home_bg01.jpg";
 
-  const handleStartScan = (type: PunchType) => {
-    setCurrentPunchType(type);
-    startScan(type);
+const INITIAL_USER: User = {
+  name: "山田 太郎",
+  rank: "NOVICE",
+  location: "UNKNOWN",
+  role: "スタッフ",
+  department: "開発部 第3セクション",
+  base: "東京本社",
+  joinDate: "2022.04.01",
+  avatar: AVATAR_OPTIONS[0]
+};
+
+const ATTENDANCE_HISTORY: AttendanceLogWithCorrection[] = [
+  { id: '1', date: '2024.12.17', clockIn: '09:02', clockOut: '18:05', location: '渋谷セクター01', status: 'normal', correctionStatus: 'none' },
+  { id: '2', date: '2024.12.16', clockIn: '09:05', clockOut: '18:15', location: '新宿セクター02', status: 'late', correctionStatus: 'pending' },
+  { id: '3', date: '2024.12.15', clockIn: '08:55', clockOut: '17:58', location: '渋谷セクター01', status: 'normal', correctionStatus: 'none' },
+];
+
+const NOTIFICATIONS_DATA: AppNotification[] = [
+  { id: 'n1', dateLabel: '今日', title: 'シフトが確定しました', description: '12/16〜12/31のシフトが公開されました。', time: '10:30', isUnread: true, type: 'shift' },
+];
+
+const App: React.FC = () => {
+  const [appState, setAppState] = useState<AppState>('login');
+  const [userData, setUserData] = useState<User>(INITIAL_USER);
+  const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [isIgnited, setIsIgnited] = useState(false);
+  const [attendanceStatus, setAttendanceStatus] = useState<AttendanceStatus>('none');
+  const [isScanning, setIsScanning] = useState(false);
+  const [punchType, setPunchType] = useState<PunchType>('in');
+  const [selectedAvatarIdx, setSelectedAvatarIdx] = useState<number | null>(null);
+  const [setupNickname, setSetupNickname] = useState('');
+  const [setupGoal, setSetupGoal] = useState('');
+  const [shiftViewState, setShiftViewState] = useState<ShiftViewState>('menu');
+  const [settingsView, setSettingsView] = useState<'main' | 'profile'>('main');
+  const [settingsNotifyShift, setSettingsNotifyShift] = useState(true);
+  const [settingsNotifyRemind, setSettingsNotifyRemind] = useState(true);
+  const [settingsNotifyCorrection, setSettingsNotifyCorrection] = useState(false);
+  const [shiftMonth, setShiftMonth] = useState(new Date());
+  const [shiftData, setShiftData] = useState<Record<string, ExtendedShiftDayLocal>>({});
+  const [selectedShiftDate, setSelectedShiftDate] = useState<string | null>(null);
+
+  const hasUnread = NOTIFICATIONS_DATA.some(n => n.isUnread);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handleLogin = () => setAppState('setup_avatar');
+  const handleAvatarSelect = () => {
+    if (selectedAvatarIdx !== null) {
+      setUserData(prev => ({ ...prev, avatar: AVATAR_OPTIONS[selectedAvatarIdx] }));
+      setAppState('setup_profile');
+    }
   };
-  
-  // --- 打刻履歴の詳細一覧 (history_list) ---
-  if (shiftViewState === 'history_list') {
-    return (
-      <div className="h-full relative overflow-hidden flex flex-col w-full bg-[#050a14] z-[100]">
-        <div className="absolute inset-0 bg-black/90 z-0" />
-        <div className="shrink-0 pt-4 px-6 relative z-10 bg-gradient-to-b from-black/80 to-transparent text-left">
-           <div className="flex items-center gap-2 text-cyan-400">
-             <div className="h-[1px] w-8 bg-cyan-400" />
-             <span className="text-xs font-black font-orbitron tracking-widest uppercase text-left">Weekly Log</span>
-           </div>
-        </div>
-        <div className="flex-1 overflow-y-auto px-6 pb-28 pt-4 no-scrollbar relative z-10 w-full text-left">
-          <div className="space-y-3">
-            {attendanceHistory.map((log) => (
-              <CyberFrame key={log.id} title={log.date} color={log.status === 'normal' ? 'cyan' : 'amber'} className="shrink-0 !p-3 bg-[#050a14]/90 w-full text-left">
-                <div className="flex justify-between items-center text-left">
-                  <div className="flex flex-col text-left">
-                      <div className="flex items-center gap-2 text-left">
-                        <MapPin className="w-3 h-3 text-slate-500" />
-                        <span className="text-[10px] font-bold text-slate-200 text-left">{log.location}</span>
-                      </div>
-                      <div className="mt-1 flex gap-4 text-left">
-                         <span className="text-lg font-orbitron font-black leading-tight text-white text-left">{log.clockIn} - {log.clockOut}</span>
-                      </div>
-                  </div>
-                  <div className={`text-[9px] font-bold px-1.5 py-0.5 border ${log.status === 'normal' ? 'border-cyan-400 text-cyan-400' : 'border-amber-500 text-amber-500'} uppercase font-orbitron text-left`}>
-                    {log.status}
-                  </div>
-                </div>
-              </CyberFrame>
-            ))}
-          </div>
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 px-6 pb-4 pt-12 bg-gradient-to-t from-black via-black/95 to-transparent z-20">
-          <CutCornerButton onClick={() => setShiftViewState('menu')} filled color="cyan" className="w-full py-4 font-black tracking-widest font-orbitron uppercase text-sm shadow-xl text-center">
-            Return to Home / 戻る
-          </CutCornerButton>
-        </div>
-      </div>
-    );
-  }
-
-  const statusLabels = {
-    none: { label: '未出勤', color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/40' },
-    working: { label: '勤務中', color: 'text-blue-400', bg: 'bg-blue-500/10', border: 'border-blue-500/40' },
-    break: { label: '休憩中', color: 'text-amber-400', bg: 'bg-emerald-500/10', border: 'border-amber-500/40' },
-    finished: { label: '退勤済', color: 'text-slate-500', bg: 'bg-slate-900/40', border: 'border-slate-800' },
+  const handleProfileComplete = () => {
+    setUserData(prev => ({ ...prev, nickname: setupNickname || prev.name, goal: setupGoal }));
+    setAppState('main');
+  };
+  const startScan = (type: PunchType) => { setPunchType(type); setIsScanning(true); };
+  const handleScanSuccess = (type: PunchType) => {
+    setIsScanning(false);
+    if (!isIgnited) setIsIgnited(true);
+    switch (type) {
+      case 'in': setAttendanceStatus('working'); break;
+      case 'out': setAttendanceStatus('finished'); break;
+      case 'break_start': setAttendanceStatus('break'); break;
+      case 'break_end': setAttendanceStatus('working'); break;
+    }
   };
 
-  const currentStatus = statusLabels[attendanceStatus] || statusLabels.none;
+  const getFullPageTitle = () => {
+    const titles: Record<Tab, string> = { home: 'HOME', shift: 'SHIFT', history: 'HISTORY', signal: 'SIGNAL', settings: 'SYS' };
+    return `${titles[activeTab]} / ${activeTab.toUpperCase()}`;
+  };
+
+  const renderMainContent = () => {
+    switch (activeTab) {
+      case 'home': return (
+        <HomePage 
+          userData={userData} attendanceStatus={attendanceStatus} 
+          startScan={startScan} isScanning={isScanning} 
+          setIsScanning={setIsScanning} handleScanSuccess={handleScanSuccess} 
+          shiftViewState={shiftViewState} setShiftViewState={setShiftViewState} 
+          attendanceHistory={ATTENDANCE_HISTORY} isIgnited={isIgnited} 
+          setIsIgnited={setIsIgnited} 
+          homeBg={HOME_BG_IMAGE}
+        />
+      );
+      case 'shift': return <ShiftPage viewState={shiftViewState} setViewState={setShiftViewState} shiftMonth={shiftMonth} setShiftMonth={setShiftMonth} shiftData={shiftData} setShiftData={setShiftData} selectedShiftDate={selectedShiftDate} setSelectedShiftDate={setSelectedShiftDate} previewMode="monthly" />;
+      case 'signal': return <SignalPage notifications={NOTIFICATIONS_DATA} />;
+      case 'settings': return <SettingsPage userData={userData} settingsView={settingsView} setSettingsView={setSettingsView} setAppState={setAppState} settingsNotifyShift={settingsNotifyShift} setSettingsNotifyShift={setSettingsNotifyShift} settingsNotifyRemind={settingsNotifyRemind} setSettingsNotifyRemind={setSettingsNotifyRemind} settingsNotifyCorrection={settingsNotifyCorrection} setSettingsNotifyCorrection={setSettingsNotifyCorrection} />;
+      default: return null;
+    }
+  };
 
   return (
-    <div className="h-full flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-700 overflow-hidden relative">
-      
-      {/* --- 背景レイヤー --- */}
-      <div className={`absolute inset-0 z-0 flex items-end justify-center pointer-events-none transition-opacity duration-300 ${isScanning ? 'opacity-0' : 'opacity-100'}`}>
-        <div className="absolute inset-0 bg-[#050a14]">
-             <img src="https://images.unsplash.com/photo-1550751827-4bd374c3f58b?auto=format&fit=crop&w=800&q=80" className="w-full h-full object-cover opacity-40 mix-blend-overlay" alt="" />
-             <div className="absolute inset-0 bg-gradient-to-t from-[#050a14] via-transparent to-[#050a14]/50" />
-        </div>
-        <img src={userData.avatar} alt="User Avatar" className="h-[90%] w-auto object-cover object-top opacity-80" />
+    <div className="fixed inset-0 bg-black flex justify-center overflow-hidden">
+      <div className="relative w-full h-full max-w-[430px] bg-[#050a14] text-white flex flex-col overflow-hidden shadow-2xl border-x border-slate-800">
+        {appState === 'main' && (
+          <header className="flex-none z-[60] flex flex-col pt-10">
+            <div className="w-full h-12 bg-[#050a14]/90 backdrop-blur-md border-b border-cyan-400/20 px-6 flex items-center justify-between">
+              <button onClick={() => { setActiveTab('home'); setShiftViewState('menu'); }} className="text-left font-orbitron font-black text-cyan-400 text-[10px]">{getFullPageTitle()}</button>
+              <button onClick={() => setActiveTab('signal')} className="relative p-2"><Bell className={`w-5 h-5 ${activeTab === 'signal' ? 'text-cyan-400' : 'text-slate-500'}`} />{hasUnread && <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-pink-500 rounded-full border border-[#050a14]" />}</button>
+            </div>
+          </header>
+        )}
+        <main className="flex-1 relative overflow-hidden flex flex-col z-10">
+          {appState === 'login' && <LoginPage onLogin={handleLogin} />}
+          {appState === 'setup_avatar' && <SetupAvatarPage avatarOptions={AVATAR_OPTIONS} selectedAvatarIdx={selectedAvatarIdx} setSelectedAvatarIdx={setSelectedAvatarIdx} onConfirm={handleAvatarSelect} />}
+          {appState === 'setup_profile' && <SetupProfilePage nickname={setupNickname} setNickname={setSetupNickname} goal={setupGoal} setGoal={setSetupGoal} onComplete={handleProfileComplete} />}
+          {appState === 'main' && renderMainContent()}
+        </main>
+        {appState === 'main' && (
+          <nav className="flex-none h-24 bg-[#050a14]/95 backdrop-blur-2xl border-t border-cyan-400/30 z-50 flex items-center justify-around px-2">
+            <NavButton active={activeTab === 'home'} onClick={() => { setActiveTab('home'); setShiftViewState('menu'); }} icon={<Home className="w-6 h-6" />} label="HOME" />
+            <NavButton active={activeTab === 'shift'} onClick={() => setActiveTab('shift')} icon={<Calendar className="w-6 h-6" />} label="SHIFT" />
+            <NavButton active={!isIgnited} onClick={() => { setActiveTab('home'); if (!isIgnited) setIsIgnited(true); }} icon={<Zap className={`w-6 h-6 ${!isIgnited ? 'animate-pulse text-amber-400' : 'text-cyan-400'}`} />} label="IGNITION" />
+            <NavButton active={activeTab === 'signal'} onClick={() => setActiveTab('signal')} icon={<Wifi className="w-6 h-6" />} label="SIGNAL" />
+            <NavButton active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} icon={<SettingsIcon className="w-6 h-6" />} label="SYS" />
+          </nav>
+        )}
       </div>
-
-      {/* --- UIレイヤー --- */}
-      <div className={`relative z-10 flex-1 flex flex-col justify-between pt-6 pb-4 px-6 transition-opacity duration-300 ${isScanning ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-        
-        {/* 上部エリア */}
-        <div className="flex flex-col gap-4 mt-2">
-           <CyberFrame title="TODAY'S_SHIFT" subTitle="本日の予定" color="magenta" className="shrink-0 !pb-0 backdrop-blur-md bg-[#050a14]/70 text-left">
-              <div className="flex items-center justify-between pb-4 text-left">
-                <div className="flex flex-col gap-1 text-left">
-                  <div className="flex items-center gap-2 text-pink-500 text-left">
-                    <BriefcaseIcon className="w-3.5 h-3.5" />
-                    <span className="text-[9px] font-mono uppercase tracking-widest font-bold text-left">Shift Assigned</span>
-                  </div>
-                  <div className="text-2xl font-black font-orbitron text-white italic tracking-tighter text-left">09:00 - 18:00</div>
-                  <div className="flex items-center gap-2 mt-1 border-t border-pink-500/20 pt-1 w-full text-left">
-                    <span className="text-[8px] bg-pink-500 text-slate-950 px-1.5 font-black uppercase font-orbitron text-left">Role</span>
-                    <span className="text-xs font-bold text-slate-200 text-left">スタッフ</span>
-                  </div>
-                </div>
-                <div className="text-right flex flex-col items-end text-right">
-                  <div className="text-[9px] text-slate-500 font-mono uppercase font-orbitron text-right">Node</div>
-                  <div className="text-xs font-bold text-pink-500 flex items-center gap-1 text-right"><MapPin className="w-3 h-3" />{userData.location || "渋谷セクター01"}</div>
-                </div>
-              </div>
-            </CyberFrame>
-
-            {/* 点火時のみ表示されるステータスバッジ */}
-            {isIgnited && (
-              <div className="flex flex-col items-center gap-2 mb-2 animate-in zoom-in-95 duration-500 text-center">
-                 <div className={`px-4 py-1.5 border ${currentStatus.border} ${currentStatus.bg} backdrop-blur-md rounded-full flex items-center gap-3 text-center`}>
-                   <div className={`w-2 h-2 rounded-full ${currentStatus.color.replace('text', 'bg')} animate-pulse`} />
-                   <span className={`text-xs font-black tracking-[0.2em] font-orbitron ${currentStatus.color} text-center`}>STATUS: {currentStatus.label}</span>
-                 </div>
-              </div>
-            )}
-        </div>
-
-        {/* 下部エリア */}
-        <div className="flex flex-col gap-3">
-          
-          {isIgnited ? (
-            /* --- 点火（ナビボタン押下）後に解放される出退勤ボタン --- */
-            <div className="flex flex-col gap-3 animate-in slide-in-from-bottom-4 duration-700 ease-out text-center">
-              {(attendanceStatus === 'none' || attendanceStatus === 'finished') && (
-                <CutCornerButton 
-                  onClick={() => handleStartScan('in')} 
-                  filled color="cyan" 
-                  className="w-full py-5 flex flex-col items-center !bg-emerald-500 text-slate-950 shadow-[0_0_30px_rgba(16,185,129,0.4)] text-center"
-                >
-                  <span className="text-[10px] opacity-70 tracking-[0.3em] font-mono leading-none mb-1 font-orbitron uppercase text-center">Refresh the World</span>
-                  <span className="text-xl font-black tracking-widest font-orbitron uppercase text-center">出勤する</span>
-                </CutCornerButton>
-              )}
-
-              {attendanceStatus === 'working' && (
-                <div className="grid grid-cols-2 gap-3 text-center">
-                  <CutCornerButton onClick={() => handleStartScan('out')} filled color="cyan" className="w-full py-5 flex flex-col items-center !bg-blue-600 text-white shadow-lg text-center">
-                    <span className="text-[10px] opacity-70 tracking-[0.3em] font-mono mb-1 font-orbitron uppercase text-center">Log out</span>
-                    <span className="text-sm font-bold uppercase text-center">退勤する</span>
-                  </CutCornerButton>
-                  <CutCornerButton onClick={() => handleStartScan('break_start')} filled color="cyan" className="w-full py-5 flex flex-col items-center !bg-blue-600/80 text-white shadow-lg text-center">
-                    <span className="text-[10px] opacity-70 tracking-[0.3em] font-mono mb-1 font-orbitron uppercase text-center">Rest</span>
-                    <span className="text-sm font-bold uppercase text-center">休憩する</span>
-                  </CutCornerButton>
-                </div>
-              )}
-
-              {attendanceStatus === 'break' && (
-                <CutCornerButton onClick={() => handleStartScan('break_end')} filled color="amber" className="w-full py-5 flex flex-col items-center !bg-amber-500 text-slate-950 shadow-[0_0_20px_rgba(245,158,11,0.5)] text-center">
-                  <span className="text-[10px] opacity-70 tracking-[0.3em] font-mono mb-1 font-orbitron uppercase text-center">Re-Engage</span>
-                  <span className="text-lg font-black font-orbitron uppercase text-center">休憩終了する</span>
-                </CutCornerButton>
-              )}
-            </div>
-          ) : (
-            /* --- 点火前：ナビゲーションへの誘導メッセージ --- */
-            <div className="flex items-center justify-center py-6 opacity-40 text-center">
-              <p className="text-[10px] text-cyan-400 font-orbitron tracking-[0.4em] uppercase animate-pulse text-center">
-                System Offline: Ignite via Nav
-              </p>
-            </div>
-          )}
-
-          {/* 直近ログ：点火に関係なく常に表示 */}
-          <CyberFrame title="ATTENDANCE_LOG" subTitle="直近の打刻" color="cyan" className="!p-3 backdrop-blur-md bg-[#050a14]/70 text-left">
-            <div className="flex flex-col gap-1 text-left">
-              <div className="flex justify-between items-center py-1 border-b border-slate-800/60 last:border-0 text-left">
-                <div className="flex flex-col text-left">
-                  <span className="text-[9px] font-mono text-slate-500 uppercase text-left">Dec 17</span>
-                  <div className="flex items-center gap-1 text-left"><MapPin className="w-2.5 h-2.5 text-slate-500" /><span className="text-[10px] font-bold text-slate-200 text-left">渋谷セクター01</span></div>
-                </div>
-                <div className="flex gap-3 items-center text-right">
-                  <div className="text-right">
-                    <div className="text-[8px] text-cyan-400/60 font-mono uppercase font-orbitron text-right">In</div>
-                    <div className="text-sm font-orbitron text-white text-right">09:02</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[8px] text-pink-400/60 font-mono uppercase font-orbitron text-right">Out</div>
-                    <div className="text-sm font-orbitron text-white text-right">18:05</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <button onClick={() => setShiftViewState('history_list')} className="text-center w-full text-[9px] text-cyan-400 mt-1 hover:text-white transition-all uppercase tracking-[0.2em] font-bold py-1 text-center">
-              [ 履歴をすべて見る ]
-            </button>
-          </CyberFrame>
-        </div>
-      </div>
-
-      {isScanning && (
-        <div className="absolute inset-0 z-[100] bg-black overflow-hidden">
-          <ScannerOverlay 
-            type={currentPunchType}
-            onClose={() => setIsScanning(false)} 
-            onSuccess={() => handleScanSuccess(currentPunchType)}
-          />
-        </div>
-      )}
     </div>
   );
 };
 
-export default HomePage;
+const NavButton = ({ active, onClick, icon, label }: any) => (
+  <button onClick={onClick} className={`flex flex-col items-center justify-center gap-1 w-16 h-16 transition-all ${active ? 'text-cyan-400' : 'text-slate-500'}`}>
+    {icon}<span className="text-[8px] font-black tracking-widest font-orbitron uppercase">{label}</span>
+  </button>
+);
+
+export default App;
