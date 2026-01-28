@@ -1,6 +1,6 @@
 {
-  "name": "StreamConnect shift 0116 modify fix",
-  "description": "A high-tech sci-fi themed attendance and shift management application with a neon HUD aesthetic.",
+  "name": "StreamConnect modify 0129-04",
+  "description": "打刻ボタンに変更後 ラスト修正",
   "requestFramePermissions": [
     "camera"
   ]

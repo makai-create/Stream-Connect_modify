@@ -1,5 +1,5 @@
 {
-  "name": "streamconnect-shift-0116-modify-fix",
+  "name": "streamconnect-modify-0129-04",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,7 +11,9 @@
   "dependencies": {
     "react-dom": "^19.2.3",
     "lucide-react": "^0.562.0",
-    "react": "^19.2.3"
+    "react": "^19.2.3",
+    "tailwind-merge": "^3.4.0",
+    "clsx": "^2.1.1"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
